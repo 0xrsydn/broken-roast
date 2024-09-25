@@ -1,12 +1,19 @@
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, Request
 from fastapi.responses import JSONResponse
 from roast_generator import generate_roast
 from pdf_extractor import extract_text_from_pdf
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.post("/roast-resume")
-async def roast_resume(file: UploadFile = File(...), language: str = Form("en")):
+@limiter.limit("6/day")
+async def roast_resume(request: Request, file: UploadFile = File(...), language: str = Form("en")):
     try:
         contents = await file.read()
         resume_text = extract_text_from_pdf(contents)
