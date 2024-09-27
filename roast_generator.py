@@ -70,7 +70,7 @@ def generate_roast(resume_text: str, language: str) -> str:
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         },
         data=json.dumps({
-            "model": "google/gemini-flash-1.5",  # Change to a different model if desired
+            "model": "nousresearch/hermes-3-llama-3.1-405b:free",  # Change to a different model if desired
             "messages": [
                 {"role": "system", "content": "You are a ruthless and brutal resume critic."},
                 {"role": "user", "content": prompt}
