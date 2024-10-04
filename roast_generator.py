@@ -2,8 +2,12 @@ import os
 import requests
 import json
 import re
+import aiohttp
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+def is_api_key_set():
+    return OPENROUTER_API_KEY is not None and len(OPENROUTER_API_KEY) > 0
 
 def get_prompt(resume_text: str, language: str) -> str:
     prompts = {
@@ -61,31 +65,34 @@ Remember, the roast should be extremely harsh and potentially offensive. Do not 
     }
     return prompts.get(language, prompts["en"]).format(resume_text=resume_text)
 
-def generate_roast(resume_text: str, language: str) -> str:
+async def generate_roast(resume_text: str, language: str) -> str:
+    if not is_api_key_set():
+        raise Exception("OpenRouter API key is not set. Please check your .env file.")
+
     prompt = get_prompt(resume_text, language)
 
-    response = requests.post(
-        url="https://openrouter.ai/api/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        },
-        data=json.dumps({
-            "model": "nousresearch/hermes-3-llama-3.1-405b:free",  # Change to a different model if desired
-            "messages": [
-                {"role": "system", "content": "You are a ruthless and brutal resume critic."},
-                {"role": "user", "content": prompt}
-            ]
-        })
-    )
-    
-    if response.status_code == 200:
-        roast = response.json()['choices'][0]['message']['content'].strip()
-        
-        # Extract the content between <roast> tags
-        roast_content = re.search(r'<roast>(.*?)</roast>', roast, re.DOTALL)
-        if roast_content:
-            return roast_content.group(1).strip()
-        else:
-            return roast  # Return the full response if <roast> tags are not found
-    else:
-        raise Exception(f"Error from OpenRouter API: {response.text}")
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            },
+            json={
+                "model": "nousresearch/hermes-3-llama-3.1-405b:free",
+                "messages": [
+                    {"role": "system", "content": "You are a ruthless and brutal resume critic."},
+                    {"role": "user", "content": prompt}
+                ]
+            }
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                print(f"data {data}")
+                roast = data['choices'][0]['message']['content'].strip()
+                roast_content = re.search(r'<roast>(.*?)</roast>', roast, re.DOTALL)
+                if roast_content:
+                    return roast_content.group(1).strip()
+                else:
+                    return roast
+            else:
+                raise Exception(f"Error from OpenRouter API: {response.status}")
